@@ -1,20 +1,21 @@
-use std::path::PathBuf;
-use iced::{Color, ContentFit, Element, Task};
 use iced::Length::Fill;
 use iced::widget::image::Handle;
 use iced::widget::{column, container, image, mouse_area, row, scrollable, space, stack, text};
+use iced::{Color, ContentFit, Element, Task};
+use std::path::PathBuf;
 
+pub mod config;
+pub mod message;
 mod background;
-mod config;
 mod error;
 mod file;
-mod message;
 
-use config::Config;
-use file::{FileItem, rename, sort_files, view_file_row, view_header};
-use message::Message;
 use background::load_background;
+use config::{Config, config_path};
+use file::{FileItem, rename, sort_files, view_file_row, view_header};
+pub use message::Message;
 
+#[derive(Debug, Clone)]
 pub struct Manager {
     background: Option<Handle>,
     pub config: Config,
@@ -32,7 +33,9 @@ impl Default for Manager {
         Self {
             background: None,
             config: Config::default(),
-            current_dir: dirs::desktop_dir().or_else(|| dirs::home_dir()).unwrap_or_default(),
+            current_dir: dirs::desktop_dir()
+                .or_else(|| dirs::home_dir())
+                .unwrap_or_default(),
             files: vec![],
             selected: vec![],
             renaming: None,
@@ -43,29 +46,47 @@ impl Default for Manager {
     }
 }
 
+
 impl Manager {
+
+    fn save_config(&self) {
+        let bytes = bitcode::encode(&self.config);
+
+        let path = config_path().unwrap_or_else(|| std::path::PathBuf::from("config"));
+
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        let _ = std::fs::write(path, bytes);
+    }
+
+    fn load_config(&mut self) {
+        let paths = [config_path(), Some(std::path::PathBuf::from("config"))];
+
+        for path in paths.into_iter().flatten() {
+            if let Ok(bytes) = std::fs::read(&path) {
+                if let Ok(cfg) = bitcode::decode::<Config>(&bytes) {
+                    self.config = cfg;
+                    break;
+                }
+            }
+        }
+    }
+
     pub fn new() -> (Self, Task<Message>) {
         let mut m = Self::default();
         m.load_config();
         m.read_dir();
         sort_files(&mut m.files, &m.config.sort);
-        let task = m.config.ui.bg_cache.as_ref().map(|bg| {
-                Task::done(Message::LoadBackground(Some(PathBuf::from(bg))))
-            }).unwrap_or(Task::none());
+        let task = m
+            .config
+            .ui
+            .bg_cache
+            .as_ref()
+            .map(|bg| Task::done(Message::LoadBackground(Some(PathBuf::from(bg)))))
+            .unwrap_or(Task::none());
         (m, task)
-    }
-
-    pub fn load_config(&mut self){
-        if let Ok(bytes) = std::fs::read("config.bin") {
-            if let Ok(cfg) = bitcode::decode::<Config>(&bytes) {
-                self.config = cfg;
-            }
-        }
-    }
-
-    fn save_config(&self) {
-        let bytes = bitcode::encode(&self.config);
-        let _ = std::fs::write("config.bin", bytes);
     }
 
     fn read_dir(&mut self) {
@@ -93,7 +114,7 @@ impl Manager {
                 }
             }
 
-             Message::Hover(i) => {
+            Message::Hover(i) => {
                 self.hovered = Some(i);
             }
 
@@ -102,7 +123,7 @@ impl Manager {
                     self.hovered = None;
                 }
             }
-            
+
             Message::Click(index) => {
                 if self.selected.len() != 1 || index != self.selected[0] {
                     self.selected = vec![index];
@@ -110,8 +131,11 @@ impl Manager {
                 } else {
                     if let Some(file) = self.files.get(index) {
                         self.renaming = Some(index);
-                        self.buffer = file.path.file_name()
-                        .map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                        self.buffer = file
+                            .path
+                            .file_name()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .unwrap_or_default();
                     }
                 }
             }
@@ -164,29 +188,30 @@ impl Manager {
             }
 
             Message::PickBackground => {
-                task = Task::perform(async {
-                    let file = rfd::FileDialog::new()
-                        .add_filter("Image", &["png", "jpg", "jpeg", "webp"])
-                        .pick_file();
+                task = Task::perform(
+                    async {
+                        let file = rfd::FileDialog::new()
+                            .add_filter("Image", &["png", "jpg", "jpeg", "webp"])
+                            .pick_file();
 
-                    file
-                    }, |path| {
-                    Message::LoadBackground(path)
-                });
+                        file
+                    },
+                    |path| Message::LoadBackground(path),
+                );
             }
 
             Message::LoadBackground(Some(path)) => {
                 task = load_background(path);
             }
 
-           Message::BackgroundLoaded(Some((path, handle))) => {
+            Message::BackgroundLoaded(Some((path, handle))) => {
                 self.config.ui.bg_cache = Some(path.to_string_lossy().to_string());
                 self.background = Some(handle);
             }
             _ => {}
         }
         task
-}
+    }
 
     pub fn view(&self) -> Element<'_, Message> {
         let background: Option<image::Image<_>> = self.background.as_ref().map(|handle| {
@@ -200,55 +225,58 @@ impl Manager {
             None => container(space()).width(Fill).height(Fill),
         };
 
-        let file_button = mouse_area(
-        container(text("File").size(11)).padding(0).center_x(35)
-        ).on_press(Message::Menu("File".to_string()));
+        let file_button = mouse_area(container(text("File").size(11)).padding(0).center_x(35))
+            .on_press(Message::Menu("File".to_string()));
 
-        let custom_button = mouse_area(
-        container(text("Custom").size(11)).padding(0).center_x(35)
-        ).on_press(Message::PickBackground);
+        let custom_button = mouse_area(container(text("Custom").size(11)).padding(0).center_x(35))
+            .on_press(Message::PickBackground);
 
-        let go_up_button = mouse_area(text("◀").size(12))
-            .on_press(Message::Goup);
+        let go_up_button = mouse_area(text("◀").size(12)).on_press(Message::Goup);
 
-        let current_path = container(text(format!("📂 {}", self.current_dir.display()))
-        .size(12)).height(14).style(|_theme| container::Style {
-            border: iced::Border {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.2).into(),
-            width: 1.0,
-            radius: 0.into(),
-            },
-            ..Default::default()
-        }).width(Fill);
-        
-        let tool_bar = row![ file_button, custom_button ];
-        let address_bar = row![ go_up_button, current_path ].spacing(2);
+        let current_path = container(text(format!("📂 {}", self.current_dir.display())).size(12))
+            .height(14)
+            .style(|_theme| container::Style {
+                border: iced::Border {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.2).into(),
+                    width: 1.0,
+                    radius: 0.into(),
+                },
+                ..Default::default()
+            })
+            .width(Fill);
+
+        let tool_bar = row![file_button, custom_button];
+        let address_bar = row![go_up_button, current_path].spacing(2);
         let view_header = view_header(&self.config.sort, &self.config.ui.column);
         let file_list = column(self.files.iter().enumerate().map(|(i, f)| {
-            view_file_row(i, f, &self.config.ui.column,
-                &self.hovered, &self.selected, &self.renaming, &self.buffer)
-        })).spacing(0);
+            view_file_row(
+                i,
+                f,
+                &self.config.ui.column,
+                &self.hovered,
+                &self.selected,
+                &self.renaming,
+                &self.buffer,
+            )
+        }))
+        .spacing(0);
 
         stack![
             background,
-
             mouse_area(container(space()).width(Fill).height(Fill))
                 .on_press(Message::ClearSelection),
-
             column![
                 tool_bar,
                 address_bar,
                 view_header,
                 scrollable(file_list).width(Fill),
-            ].spacing(0),
-
+            ]
+            .spacing(0),
             self.error.as_ref().map(error::error_modal_view)
         ]
         .into()
     }
 }
-
-
 
 impl Drop for Manager {
     fn drop(&mut self) {

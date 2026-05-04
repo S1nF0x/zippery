@@ -1,19 +1,20 @@
 use bitcode::{Encode, Decode};
+use iced::Theme;
 
-#[derive(Clone, Decode, Encode)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub struct ColumnState {
     pub name_width: f32,
     pub size_width: f32,
     pub date_width: f32,
 }
 
-#[derive(Clone, Decode, Encode)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub struct ThemeConfig {
     pub theme: ThemeKind,
     pub follow_system: bool
 }
 
-#[derive(Clone, Default, Decode, Encode)]
+#[derive(Debug, Clone, Default, Decode, Encode)]
 pub struct UiConfig {
     pub column: ColumnState,
     pub bg_cache: Option<String>,
@@ -21,7 +22,7 @@ pub struct UiConfig {
 }
 
 
-#[derive(Clone, Default, Decode, Encode)]
+#[derive(Debug, Clone, Default, Decode, Encode)]
 pub struct Config {
     pub ui: UiConfig,
     pub sort: (SortColumn, bool)
@@ -51,8 +52,27 @@ impl Default for ColumnState {
     }
 }
 
-#[derive(Clone, Decode, Encode)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub enum ThemeKind {
     Light,
     Dark
+}
+
+impl From<ThemeKind> for Theme {
+    fn from(value: ThemeKind) -> Self {
+        match value {
+            ThemeKind::Light => Theme::Light,
+            ThemeKind::Dark => Theme::Dark,
+        }
+    }
+}
+
+impl Default for ThemeKind {
+    fn default() -> Self {
+        ThemeKind::Light
+    }
+}
+
+pub fn config_path() -> Option<std::path::PathBuf> {
+    dirs::config_dir().map(|base| base.join("zippery").join("config"))
 }

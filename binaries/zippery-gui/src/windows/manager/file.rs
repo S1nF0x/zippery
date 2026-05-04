@@ -11,6 +11,7 @@ use chrono::{DateTime, Local};
 use super::config::{ColumnState, SortColumn};
 use super::message::Message;
 
+#[derive(Debug, Clone)]
 pub struct FileItem {
     pub path: PathBuf,
     pub size: Option<usize>,
