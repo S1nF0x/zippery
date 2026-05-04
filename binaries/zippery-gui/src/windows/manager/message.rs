@@ -3,10 +3,14 @@ use iced::widget::image::Handle;
 
 use super::config::SortColumn;
 #[derive(Debug, Clone)]
+pub enum Request {
+    OpenAbout,
+    // future requests
+}
+
+#[derive(Debug, Clone)]
 pub enum Message {
-    //About,
-    //File,
-    Menu(String),
+    Request(Request),
     Click(usize),
     ClearSelection,
     Hover(usize),

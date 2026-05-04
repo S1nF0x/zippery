@@ -4,16 +4,16 @@ use iced::widget::{column, container, image, mouse_area, row, scrollable, space,
 use iced::{Color, ContentFit, Element, Task};
 use std::path::PathBuf;
 
-pub mod config;
-pub mod message;
 mod background;
+pub mod config;
 mod error;
 mod file;
+pub mod message;
 
 use background::load_background;
 use config::{Config, config_path};
 use file::{FileItem, rename, sort_files, view_file_row, view_header};
-pub use message::Message;
+pub use message::{Message, Request};
 
 #[derive(Debug, Clone)]
 pub struct Manager {
@@ -46,9 +46,7 @@ impl Default for Manager {
     }
 }
 
-
 impl Manager {
-
     fn save_config(&self) {
         let bytes = bitcode::encode(&self.config);
 
@@ -93,19 +91,14 @@ impl Manager {
         self.files = file::read_dir(&self.current_dir);
     }
 
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn title(&self) -> String {
+        format!("Zippery - {}", self.current_dir.display())
+    }
+
+    pub fn update(&mut self, msg: Message) -> Task<Message> {
         let mut task = Task::none();
-        match message {
-            Message::Menu(menu_action) => match menu_action.as_str() {
-                "File" => {
-                    let _ = iced::window::open(iced::window::Settings {
-                        size: iced::Size::new(400.0, 150.0),
-                        position: iced::window::Position::Centered,
-                        ..Default::default()
-                    });
-                }
-                _ => {}
-            },
+        match msg {
+            Message::Request(_) => return Task::done(msg),
 
             Message::Goup => {
                 if let Some(parent) = self.current_dir.parent() {
@@ -225,11 +218,13 @@ impl Manager {
             None => container(space()).width(Fill).height(Fill),
         };
 
-        let file_button = mouse_area(container(text("File").size(11)).padding(0).center_x(35))
-            .on_press(Message::Menu("File".to_string()));
+        let file_button = mouse_area(container(text("File").size(11)).padding(0).center_x(30));
 
-        let custom_button = mouse_area(container(text("Custom").size(11)).padding(0).center_x(35))
+        let custom_button = mouse_area(container(text("Custom").size(11)).padding(0).center_x(45))
             .on_press(Message::PickBackground);
+
+        let about_button = mouse_area(container(text("About").size(11)).padding(0).center_x(38))
+            .on_press(Message::Request(Request::OpenAbout));
 
         let go_up_button = mouse_area(text("◀").size(12)).on_press(Message::Goup);
 
@@ -245,7 +240,7 @@ impl Manager {
             })
             .width(Fill);
 
-        let tool_bar = row![file_button, custom_button];
+        let tool_bar = row![file_button, custom_button, about_button].spacing(4);
         let address_bar = row![go_up_button, current_path].spacing(2);
         let view_header = view_header(&self.config.sort, &self.config.ui.column);
         let file_list = column(self.files.iter().enumerate().map(|(i, f)| {
@@ -270,8 +265,7 @@ impl Manager {
                 address_bar,
                 view_header,
                 scrollable(file_list).width(Fill),
-            ]
-            .spacing(0),
+            ].spacing(0),
             self.error.as_ref().map(error::error_modal_view)
         ]
         .into()
